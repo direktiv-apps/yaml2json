@@ -1,0 +1,181 @@
+swagger: "2.0"
+info:
+  description: Converts incoming json, xml or properties to json, xml or properties.
+  title: yaml2json
+  version: 1.0.0
+  x-direktiv-meta:
+    container: direktiv/yaml2json
+    maintainer: |-
+      [direktiv.io](https://www.direktiv.io)
+    issues: https://github.com/direktiv-apps/yaml2json/issues
+    url: https://github.com/direktiv-apps/yaml2json
+    category: Tools
+    license: |-
+      [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)
+    long-description: |-
+      This [yq](https://github.com/mikefarah/yq) based service can convert incoming json, xml, csv, tsv or properties data into the same formats.
+      The incoming data can be a string, file path or base64-encoded string. 
+consumes:
+- application/json
+produces:
+- application/json
+schemes:
+- http
+paths:
+  /: 
+    delete:
+      parameters:
+        - name: Direktiv-ActionID
+          in: header
+          type: string
+          description: |
+            On cancel Direktiv sends a DELETE request to
+            the action with id in the header
+      x-direktiv:
+        cancel: echo 'cancel {{ .DirektivActionID }}'
+      responses:
+        200:
+    post:
+      parameters:
+        - name: Direktiv-ActionID
+          in: header
+          type: string
+          description: |
+            direktiv action id is an UUID. 
+            For development it can be set to 'development'
+        - name: Direktiv-TempDir
+          in: header
+          type: string
+          description: |
+            direktiv temp dir is the working directory for that request
+            For development it can be set to e.g. '/tmp'
+        - name: body
+          in: body
+          description: The service requires only the data field but can accept different data types.
+          schema:
+            type: object
+            required:
+              - data
+            properties:
+              data:
+                type: string
+                example: aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g/dj1kUXc0dzlXZ1hjUQ==
+                description: Depending on the input-type this value can be a file path, base64 string or a plain string. 
+              input-format: 
+                type: string
+                example: xml
+                default: yaml
+                enum: ["yaml", "xml", "props"]
+                description: Input format. Possible values are yaml,xml,prop.
+              output-format: 
+                type: string
+                example: json
+                default: json
+                description: Output format. Possible values are yaml, json, props, csv, tsv, xml.
+                enum: ["yaml","json","props","csv","tsv","xml"]
+              input-type: 
+                type: string
+                enum: ["file", "string", "base64"]
+                example: base64
+                default: string
+      # direktiv code generation is configured here
+      x-direktiv-function: |-
+        functions:
+          - id: yaml2json
+            image: direktiv/yaml2json
+            type: knative-workflow
+      x-direktiv-examples:
+        - title: String
+          content: |-
+            - id: convert
+                 type: action
+                 action:
+                   function: yaml2json
+                   input:
+                     data: 'hello: world'
+                     output-format: json
+                     input-type: string
+        - title: File
+          content: |-
+             - id: set
+                  type: setter
+                  variables:
+                  - key: indata
+                    scope: instance
+                    mimeType: text/plain
+                    value: 'hello: world'
+                  transition: modify
+               - id: modify 
+                  type: action
+                  action:
+                    function: yaml2json
+                    files:
+                      - key: indata
+                        scope: instance
+                    input: 
+                      data: indata
+                      output-format: json
+                      input-type: file
+        - title: Base64
+          content: |-
+            - id: convert
+                 type: action
+                 action:
+                   function: yaml2json
+                   input:
+                     data: aGVsbG86IHdvcmxk
+                     output-format: xml
+                     input-type: base64
+      x-direktiv:  
+        cmds:
+        - action: exec
+          exec: /y2j.sh "{{ .Data }}" {{ default "yaml" .InputFormat }} {{ default "json" .OutputFormat }} {{ default "string" .InputType }}
+        output: |
+          {
+            "output": {{ index . 0 | toJson }}
+          }
+      x-direktiv-errors:
+        io.direktiv.command.error: Command execution failed
+        io.direktiv.output.error: Template error for output generation of the service
+        io.direktiv.ri.error: Can not create information object from request
+      responses:
+        200:
+          description: nice greeting
+          schema:
+            type: object
+            properties:
+              output:
+                type: object
+                properties:
+                  result:
+                    additionalProperties: {}
+                  success:
+                    type: boolean
+          examples: 
+            greeting: Hello YourName
+        default:
+          description: generic error response
+          headers:
+            Direktiv-ErrorCode:
+              type: string
+            Direktiv-ErrorMessage:
+              type: string
+          schema:
+            $ref: "#/definitions/error"
+definitions:
+  direktivFile:
+    type: object
+    x-go-type:
+      type: DirektivFile
+      import:
+        package: github.com/direktiv/apps/go/pkg/apps 
+  error:
+    type: object
+    required:
+      - errorCode
+      - errorMessage
+    properties:
+      errorCode:
+        type: string
+      errorMessage:
+        type: string
