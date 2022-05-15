@@ -11,7 +11,7 @@ elif [[ "$it" == "file" ]]; then
     input=`cat $1`
 fi
 
-echo $input | yq -p $2 -o $3
+echo "$input" | yq -p $2 -o $3
 
 # cat out.tmp
 
